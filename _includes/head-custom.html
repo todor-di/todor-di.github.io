@@ -1,0 +1,22 @@
+<!-- Render ```mermaid code blocks as diagrams (GitHub Pages does not do this natively). -->
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+
+  mermaid.initialize({ startOnLoad: false, theme: "neutral" });
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    const nodes = [];
+    document.querySelectorAll("div.language-mermaid, pre > code.language-mermaid").forEach((block) => {
+      const target = block.tagName === "CODE" ? block.parentElement : block;
+      const diagram = document.createElement("pre");
+      diagram.className = "mermaid";
+      diagram.textContent = block.textContent;
+      target.replaceWith(diagram);
+      nodes.push(diagram);
+    });
+    if (nodes.length) await mermaid.run({ nodes });
+  });
+</script>
+<style>
+  pre.mermaid { background: none; border: none; text-align: center; }
+</style>
