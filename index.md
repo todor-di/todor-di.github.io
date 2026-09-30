@@ -117,41 +117,6 @@ flowchart TB
     class APPLE,SEPA external
 ```
 
-**Level 2: Containers.** What's inside the rule engine, and how a decision request and a rule change flow through it:
-
-```mermaid
-flowchart TB
-    APPLE["<b>Apple Pay Connector</b><br/><small>[Software System]</small><br/>Card payments via Apple Pay"]
-    SEPA["<b>SEPA Connector</b><br/><small>[Software System]</small><br/>SCT, SCT Inst and SDD payments"]
-    OPS["<b>Business Operations</b><br/><small>[Person]</small><br/>Configures rules"]
-
-    subgraph ENGINE["Rule Engine [Software System]"]
-        EVAL["<b>Evaluation API</b><br/><small>[Container: REST, stateless]</small><br/>Evaluates a payload against the<br/>active rule set, returns a decision"]
-        ADMIN["<b>Rule Management API</b><br/><small>[Container: REST]</small><br/>Validates, versions and<br/>publishes rule sets"]
-        CACHE[("<b>Compiled Rule Cache</b><br/><small>[Container: In-memory]</small><br/>Pre-compiled decision trees")]
-        AUDIT[("<b>Decision Audit Log</b><br/><small>[Container: Append-only store]</small><br/>Decision, rule version<br/>and evaluation path")]
-        BUS{{"<b>Rule Events</b><br/><small>[Container: Event bus]</small><br/>Rule-published events"}}
-        RULES[("<b>Rule Repository</b><br/><small>[Container: Versioned store]</small><br/>Rule sets and version history")]
-    end
-
-    APPLE -- "Evaluate payment<br/><small>[REST/JSON]</small>" --> EVAL
-    SEPA -- "Evaluate transfer<br/><small>[REST/JSON]</small>" --> EVAL
-    OPS -- "Edits and publishes rules<br/><small>[HTTPS]</small>" --> ADMIN
-    EVAL -- "Records decision" --> AUDIT
-    EVAL -- "Reads active rules" --> CACHE
-    ADMIN -- "Stores new version" --> RULES
-    ADMIN -- "Publishes rule change" --> BUS
-    BUS -- "Invalidates / reloads" --> CACHE
-
-    classDef person fill:#08427b,stroke:#052e56,color:#fff
-    classDef container fill:#438dd5,stroke:#2e6295,color:#fff
-    classDef external fill:#999,stroke:#6b6b6b,color:#fff
-    class OPS person
-    class EVAL,ADMIN,CACHE,AUDIT,BUS,RULES container
-    class APPLE,SEPA external
-    style ENGINE fill:none,stroke:#0b4884,stroke-dasharray:6 4
-```
-
 ### Main concepts
 
 **Rule** - A javascript code, which is executed in a secure environment on the server. The code and the server belong to the same entity and access to both is restricted. <br>
