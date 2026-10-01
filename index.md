@@ -22,7 +22,7 @@ This page covers three products I've built, each as a short case study: the prob
 
 ### The problem
 
-3-D Secure is mandatory for card payments within Europe, however for non-card payment methods, the authentication is standardized and is done via multiple channels. This causes friction and abandonment during payment sessions.
+3-D Secure is mandatory for card payments within Europe, however for non-card payment methods, the authentication is not standardized and is done via multiple channels. This causes friction and abandonment during payment sessions.
 
 ### The solution
 
@@ -123,7 +123,7 @@ flowchart TB
 **Rule set** - A collection of rules with sequence of execution. <br>
 **Triggers** - Defined via rule management API. Each trigger is created to reflect a specific processing step and service. <br>
 **Contracts** - The format of messages being exchanged for each trigger. <br>
-**Run rules** - A specific execution environment, which allows rule creators to test their code execution. Each rule must comply with specific  requirement (execution time, memory consumption), otherwise it cannot be included in a rule-set. <br>
+**Run rules** - A specific execution environment, which allows rule creators to test their code execution. Each rule must comply with specific requirement (execution time, memory consumption), otherwise it cannot be included in a rule-set. <br>
 **Connectors** - A list of pre-defined functions, which rule creators can invoke in their javascript code (such as external systems, caching or data storage). Some example connectors are "list", "dictionary" or "call". 
 
 **Example: Making a SEPA payment on sepa-input trigger**:
@@ -191,7 +191,7 @@ POST /triggers/sepa-input/
 ### Impact
 
 - **Time-to-market for new rules:** from _[weeks]_ of developer effort and a release cycle to _[minutes]_ of operational configuration.
-- **Developer friendly:** Testing is done in isolation with pre-defined conditions that msut be met. Misconfiguration, exception handling and memory issues are caught in advance.
+- **Developer friendly:** Testing is done in isolation with pre-defined conditions that must be met. Misconfiguration, exception handling and memory issues are caught in advance.
 - **Decoupling:** routing, fraud, and fee logic moved out of the core services, so rule changes no longer need a deployment.
 - **Traceability:** every decision is recorded with the rule-set version and evaluation path, for audit and dispute handling.
 
@@ -210,8 +210,6 @@ Any system that stores, processes or transmits a raw Primary Account Number (PAN
 I designed a proxy that intercepts raw card data before it reaches the merchant's backend. It produces a token, which is not bound by any acquirer/issuer and can be later used to create network tokens. 
 
 ### How it works
-
-Raw card data stays inside the red zone. Only tokens cross into the merchant's green zone.
 
 ```mermaid
 sequenceDiagram
@@ -237,14 +235,15 @@ sequenceDiagram
     MFE->>MBE: Pass the public tokens
     MBE->>PRX: POST /vault/pan with public token to exchange it for perm
     PRX->>PRX: Invalidate public PAN token, create permanent
-    PRX->>MBE: Return permenant PAN token
-    MBE->>PRX: POST /vault/cvv with public token to exchange it for perm
-    PRX->>PRX: Invalidate public PAN token, create permanent
     PRX->>MBE: Return permanent PAN token
+    MBE->>PRX: POST /vault/cvv with public token to exchange it for perm
+    PRX->>PRX: Invalidate public CVV token, create permanent
+    PRX->>MBE: Return permanent CVV token
     MBE->>PRX: POST /authorisation/ (with perm tokens)
     PRX->>PRX: Replace tokens with PAN and CVV
     PRX->>FD: Forward authorization
     FD->>PRX: Return result
+    PRX->>PRX: Remove the CVV token after authorisation is completed
     PRX->>MBE: Return result
     MBE->>MFE: Return result
     MFE->>C: Show result
@@ -257,14 +256,13 @@ sequenceDiagram
 ```
 #### Notes
 
-**BIN Checking** The tokenizator also supports BIN checks with data returned by the schemes.
-**POS handling** PIN encryption for POS devices is also supported.
-**3DS Server** Schemes provide a DS matching based on BIN, which can also be included in the component.
+- **BIN Check:** The proxy component also supports BIN checks with data returned by the schemes.
+- **POS handling:** PIN encryption for POS devices is also supported.
+- **3DS Server:** Schemes provide a DS matching based on BIN, which can also be included in the component.
 
 
 ### Impact
 
-- **Reduced compliance scope:** the merchant's PCI-DSS scope is downgraded, e.g. to **SAQ A** or **SAQ A-EP** instead of a full SAQ D / Report on Compliance.
+- **Reduced compliance scope:** the merchant's PCI-DSS scope is downgraded to **SAQ A** or **SAQ A-EP** instead of a full SAQ D / Report on Compliance.
 - **Cost savings:** Removes the price for tokens stored at a provider entirely.
 - **Risk reduction:** Limiting all PCI DSS scope into one service. This offers a far greater system flexibility.
-- **Authorisation uplift:** network tokens stay valid when cards are reissued _[e.g. +X% authorisation rate]_.
