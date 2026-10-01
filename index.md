@@ -190,7 +190,7 @@ POST /triggers/sepa-input/
 
 ### Impact
 
-- **Time-to-market for new rules:** from _[weeks]_ of developer effort and a release cycle to _[minutes]_ of operational configuration.
+- **Time-to-market for new rules:** from 2 weeks of developer effort and a release cycle to 4 hours of operational configuration.
 - **Developer friendly:** Testing is done in isolation with pre-defined conditions that must be met. Misconfiguration, exception handling and memory issues are caught in advance.
 - **Decoupling:** routing, fraud, and fee logic moved out of the core services, so rule changes no longer need a deployment.
 - **Traceability:** every decision is recorded with the rule-set version and evaluation path, for audit and dispute handling.
