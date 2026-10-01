@@ -123,7 +123,7 @@ flowchart TB
 **Rule set** - A collection of rules with sequence of execution. <br>
 **Triggers** - Defined via rule management API. Each trigger is created to reflect a specific processing step and service. <br>
 **Contracts** - The format of messages being exchanged for each trigger. <br>
-**Rule test** - A specific execution environment, which allows rule creators to test their code execution. Each rule must comply with specific latency requirement, otherwise it cannot be included in a rule-set.
+**Run rules** - A specific execution environment, which allows rule creators to test their code execution. Each rule must comply with specific  requirement (execution time, memory consumption), otherwise it cannot be included in a rule-set. <br>
 **Connectors** - A list of pre-defined functions, which rule creators can invoke in their javascript code (such as external systems, caching or data storage). Some example connectors are "list", "dictionary" or "call". 
 
 **Example: Making a SEPA payment on sepa-input trigger**:
@@ -191,6 +191,7 @@ POST /triggers/sepa-input/
 ### Impact
 
 - **Time-to-market for new rules:** from _[weeks]_ of developer effort and a release cycle to _[minutes]_ of operational configuration.
+- **Developer friendly:** Testing is done in isolation with pre-defined conditions that msut be met. Misconfiguration, exception handling and memory issues are caught in advance.
 - **Decoupling:** routing, fraud, and fee logic moved out of the core services, so rule changes no longer need a deployment.
 - **Traceability:** every decision is recorded with the rule-set version and evaluation path, for audit and dispute handling.
 
@@ -202,53 +203,68 @@ POST /triggers/sepa-input/
 
 ### The problem
 
-Any system that stores, processes or transmits a raw Primary Account Number (PAN) falls within PCI-DSS scope. Handling raw PANs puts merchants and payment providers into the highest and most expensive compliance tiers.
+Any system that stores, processes or transmits a raw Primary Account Number (PAN) and/or CVV falls within PCI-DSS scope. Handling raw card data puts merchants and payment providers into the highest and most expensive compliance tiers.
 
 ### The solution
 
-I designed a proxy that intercepts PAN data before it reaches the merchant's backend. It swaps the PAN for a **network token** (EMVCo, via Mastercard MDES / Visa VTS), so the core systems only ever handle desensitised data.
+I designed a proxy that intercepts raw card data before it reaches the merchant's backend. It produces a token, which is not bound by any acquirer/issuer and can be later used to create network tokens. 
 
 ### How it works
 
 Raw card data stays inside the red zone. Only tokens cross into the merchant's green zone.
 
 ```mermaid
-flowchart TB
-    subgraph RED["🔴 Red zone: PCI-DSS scope (raw PAN)"]
-        direction LR
-        C[Cardholder<br/>browser / app]
-        P[PCI Proxy<br/>Tokenization]
-        TSP[Token Service Provider<br/>MDES / VTS]
+sequenceDiagram
+    autonumber
+    actor C as Customer
+    participant FE as PCI Proxy Web SDK
+    participant MFE as Merchant Website
+    participant MBE as Merchant server
+    participant PRX as PCI Proxy
+    participant SC as Scheme (MC, VISA)
+    participant FD as FirstData (example)
+
+    rect rgba(128,128,128,0.08)
+    C->>MFE: Select a payment method and click "Pay"
+    MFE->>FE: Initiate tokenisation component
+    FE->>C: Render credit card input forms (one for PAN, one for CVV) 
+    C->>FE: Enter credit card details
+    FE->>PRX: Create two temporary tokens - 1 for PAN, 1 for CVV
+    PRX->>PRX: Split PAN into segments, produce public token, hash the segments
+    PRX->>PRX: Produce public token for CVV, hash
+    PRX->>FE: Return public tokens for PAN and CVV
+    FE->>MFE: Return public tokens
+    MFE->>MBE: Pass the public tokens
+    MBE->>PRX: POST /vault/pan with public token to exchange it for perm
+    PRX->>PRX: Invalidate public PAN token, create permanent
+    PRX->>MBE: Return permenant PAN token
+    MBE->>PRX: POST /vault/cvv with public token to exchange it for perm
+    PRX->>PRX: Invalidate public PAN token, create permanent
+    PRX->>MBE: Return permanent PAN token
+    MBE->>PRX: POST /authorisation/ (with perm tokens)
+    PRX->>PRX: Replace tokens with PAN and CVV
+    PRX->>FD: Forward authorization
+    FD->>PRX: Return result
+    PRX->>MBE: Return result
+    MBE->>MFE: Return result
+    MFE->>C: Show result
+
+    note over PRX, SC: Async process kicks in;
+    PRX->>SC: Create network token
+    SC->>SC: Issue network token
+    SC->>PRX: Return network token
     end
-
-    subgraph GREEN["🟢 Green zone: desensitised scope (tokens only)"]
-        direction LR
-        B[Merchant backend]
-        DB[(Merchant databases)]
-        AN[Analytics / CRM]
-    end
-
-    PSP[PSP / Acquirer]
-
-    C -- "① raw PAN (TLS)" --> P
-    P -- "② PAN → token request" --> TSP
-    TSP -- "③ network token" --> P
-    P -- "④ network token only" --> B
-    B --> DB
-    B --> AN
-    B -- "⑤ token + cryptogram" --> PSP
-
-    classDef red fill:#fde2e2,stroke:#c0392b,color:#000
-    classDef green fill:#e3f6e8,stroke:#27ae60,color:#000
-    class C,P,TSP red
-    class B,DB,AN green
-    style RED fill:#fff5f5,stroke:#c0392b
-    style GREEN fill:#f5fff7,stroke:#27ae60
 ```
+#### Notes
+
+**BIN Checking** The tokenizator also supports BIN checks with data returned by the schemes.
+**POS handling** PIN encryption for POS devices is also supported.
+**3DS Server** Schemes provide a DS matching based on BIN, which can also be included in the component.
+
 
 ### Impact
 
 - **Reduced compliance scope:** the merchant's PCI-DSS scope is downgraded, e.g. to **SAQ A** or **SAQ A-EP** instead of a full SAQ D / Report on Compliance.
-- **Cost savings:** _[e.g. annual audit and compliance cost reduced by X]_
-- **Risk reduction:** a breach of the merchant's systems exposes only tokens, which are useless outside their domain.
+- **Cost savings:** Removes the price for tokens stored at a provider entirely.
+- **Risk reduction:** Limiting all PCI DSS scope into one service. This offers a far greater system flexibility.
 - **Authorisation uplift:** network tokens stay valid when cards are reissued _[e.g. +X% authorisation rate]_.
