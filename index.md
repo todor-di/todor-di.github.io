@@ -219,7 +219,6 @@ sequenceDiagram
     participant MFE as Merchant Website
     participant MBE as Merchant server
     participant PRX as PCI Proxy
-    participant SC as Scheme (MC, VISA)
     participant FD as FirstData (example)
 
     rect rgba(128,128,128,0.08)
@@ -247,11 +246,6 @@ sequenceDiagram
     PRX->>MBE: Return result
     MBE->>MFE: Return result
     MFE->>C: Show result
-
-    note over PRX, SC: Async process kicks in;
-    PRX->>SC: Create network token
-    SC->>SC: Issue network token
-    SC->>PRX: Return network token
     end
 ```
 #### Notes
@@ -259,6 +253,7 @@ sequenceDiagram
 - **BIN Check:** The proxy component also supports BIN checks with data returned by the schemes.
 - **POS handling:** PIN encryption for POS devices is also supported.
 - **3DS Server:** Schemes provide a DS matching based on BIN, which can also be included in the component.
+- **Network tokenisation:** Network tokens can also be created with MC and VISA during processing.
 
 
 ### Impact
